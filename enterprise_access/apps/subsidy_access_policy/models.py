@@ -529,6 +529,15 @@ class SubsidyAccessPolicy(TimeStampedModel):
         )
         return sorted_policies[0]
 
+    def delete(self, *args, **kwargs):
+        """
+        Perform a soft-delete, overriding the standard delete() method to prevent hard-deletes.
+
+        If this instance was already soft-deleted, invoking delete() is a no-op.
+        """
+        self.active = False
+        self.save()
+
 
 class CreditPolicyMixin:
     """

@@ -140,7 +140,7 @@ class TestPolicyCRUDAuthNAndPermissionChecks(CRUDViewTestMixin, APITestWithMocks
 
 
 @ddt.ddt
-class TestAuthenticatedPolicyReadOnlyViews(CRUDViewTestMixin, APITestWithMocks):
+class TestAuthenticatedPolicyCRUDViews(CRUDViewTestMixin, APITestWithMocks):
     """
     Test the list and detail views for subsidy access policy records.
     """
@@ -236,6 +236,43 @@ class TestAuthenticatedPolicyReadOnlyViews(CRUDViewTestMixin, APITestWithMocks):
             sorted(expected_results, key=sort_key),
             sorted(response_json['results'], key=sort_key),
         )
+
+    def test_destroy_view(self):
+        """
+        Test that the destroy view performs a soft-delete and returns an appropriate response with 200 status code and
+        the expected results of serialization.
+        """
+        # Set the JWT-based auth to an operator.
+        self.set_jwt_cookie([
+            {'system_wide_role': SYSTEM_ENTERPRISE_OPERATOR_ROLE, 'context': str(TEST_ENTERPRISE_UUID)}
+        ])
+
+        request_payload = {'reason': 'Peer pressure.'}
+
+        # Test the destroy endpoint
+        response = self.client.delete(
+            reverse('api:v1:subsidy-access-policies-detail', kwargs={'uuid': str(self.redeemable_policy.uuid)}),
+            request_payload,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual({
+            'access_method': 'direct',
+            'active': False,
+            'catalog_uuid': str(self.redeemable_policy.catalog_uuid),
+            'description': '',
+            'enterprise_customer_uuid': str(self.enterprise_uuid),
+            'per_learner_enrollment_limit': self.redeemable_policy.per_learner_enrollment_limit,
+            'per_learner_spend_limit': self.redeemable_policy.per_learner_spend_limit,
+            'policy_type': 'PerLearnerEnrollmentCreditAccessPolicy',
+            'spend_limit': 3,
+            'subsidy_uuid': str(self.redeemable_policy.subsidy_uuid),
+            'uuid': str(self.redeemable_policy.uuid),
+        }, response.json())
+
+        # Check that the latest history record for this policy contains the change reason provided via the API.
+        self.redeemable_policy.refresh_from_db()
+        assert self.redeemable_policy.history.order_by('-history_date').first().history_change_reason \
+            == request_payload['reason']
 
 
 @ddt.ddt
